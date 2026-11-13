@@ -68,7 +68,7 @@ jobs:
     needs: audit
     runs-on: ubuntu-latest
     permissions:
-      security-events: read
+      security-events: write
     steps:
       - uses: actions/checkout@v7
       - name: Run Checkov on k8s/
