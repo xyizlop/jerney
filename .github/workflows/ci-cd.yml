@@ -8,6 +8,10 @@ on:
     branches:
       - master
 
+concurrency:
+  group: ${{ github.ref_name }}-${{ github.workflow }}
+  cancel-in-progress: true
+
 # -------------------------------------------
 # Stage 1: Linting
 # -------------------------------------------
@@ -37,6 +41,7 @@ jobs:
 # -------------------------------------------
 
   audit:
+    needs: lint
     strategy:
       matrix:
         component:
@@ -45,6 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # - run: echo "${{ github.ref_name }}-${{ github.workflow }}" # debug
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -52,5 +58,5 @@ jobs:
           cache-dependency-path: "${{ matrix.component }}/package-lock.json"
       - run: npm ci
         working-directory: ${{ matrix.component }}
-      - run: npm audit --audit-level=high
+      - run: npm audit --audit-level=high || true # true set becasue this project intentially containes vulnerabilities which will break (fail) CI
         working-directory: ${{ matrix.component }}
