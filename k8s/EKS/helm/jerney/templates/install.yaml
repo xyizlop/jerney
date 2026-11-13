@@ -1,0 +1,317 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: jerney
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jerney
+  namespace: jerney
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: jerney
+  name: pod-reader
+rules:
+- apiGroups: [""] # "" indicates the core API group
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: read-pods-binding
+  namespace: jerney
+subjects:
+- kind: ServiceAccount
+  name: jerney # Must match the ServiceAccount name
+  namespace: jerney
+roleRef:
+  kind: Role
+  name: pod-reader # Must match the Role name
+  apiGroup: rbac.authorization.k8s.io
+---
+# --------------------------------------------------
+# Database (postgres) Configuration
+# --------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.database.name }}-cm
+  namespace: jerney
+data:
+  db_name: {{ .Values.database.name }}
+  db_host: {{ .Values.database.host }}
+  db_port: {{ .Values.database.port | quote }}
+  db_user: {{ .Values.database.username }}
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: jerney-database-secret
+  namespace: jerney
+spec:
+  encryptedData:
+    db_password: AgC29YPGukHjhLVlUMrv4nzG0ccpAC5UOz4v6reJ/vTJDV+YrCrGzX7qkp8OQkBE3sCQTwTQSAARePwesUXl2sjKsGmEgmovvKdpWTZli3uzRSex5fpJRnp64V+pHm57izZoN42yD60m8jd0Z8XTcjiv61uRuLW3VoImdu5ZJvISLrUXBEWxDNPoBtMdV+PIdlQzB7IBD2YlCixjpXoEzv4Q/pMIaLOp+EJJZ5DdjIFJIiUasi13h3Gtp+b77PeJ5EOkRsAz467QkyyC0LlqBGfNuOE+vuogaey7ysVyjGrOMXwwlgK9h69ATZMFODwgi6ceplmgqQUoBLV2u3T2mOerCkasOgLjSVNgSkKpl5lbzjEMPGGkSD8tBL6Jb8X8Y2/OUFvDEo1doOjZOvzRSanC8JVXQlJNyS89+dNZ/U34hrgqRx1yzTqhvik0UwiHyW65BhY5QYzbyZD3PGrrrJp00vSws3azG2nbqPGMxgQ7qGS4SwH+rSYAAOLCqswt8+J0+NBhft4Yd0RdY/pKxxi9Uaa/GylAabVXlErww9iysyxStXV8CqZuuYs/wLDtkjEYYe+6d1e66h+frDKU4UyiAAALAIW30znjVfqOEAzgVzs7nJKPma25paiE/1bg3CjITM/MDT4ouOx+HtgAAHK+1lgNHkt4KuYMA+koDdzxSBAWVtRuIcCIWOrCY0ntQ5sZ1NMDl2B2xsPUZmLWJfVLS9Gh
+  template:
+    metadata:
+      name: jerney-database-secret
+      namespace: jerney
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    service: {{ .Values.database.name }}
+  name: {{ .Values.database.name }}
+  namespace: jerney
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: {{ .Values.database.name }}
+  serviceName: {{ .Values.database.name }}
+  template:
+    metadata:
+      labels:
+        service: {{ .Values.database.name }}
+        app: {{ .Values.database.name }}
+    spec:
+      serviceAccountName: jerney
+      containers:
+      - name: {{ .Values.database.name }}
+        image: postgres:16
+        ports:
+        - containerPort: 5432
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false # you are writing to database
+          # you can't set this true becasue it will return error: spec.containers{jerney-database}: Error: container has runAsNonRoot and image will run as root (pod: "jerney-database-0_jerney(baa5eb18-f2cf-4283-be4d-638eddfaf585)", container: jerney-database)
+          runAsNonRoot: false
+        readinessProbe:
+          tcpSocket:
+            port: 5432
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+          tcpSocket:
+            port: 5432
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+        env:
+          - name: POSTGRES_USER
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Values.database.name }}-cm
+                key: db_user
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.database.name }}-secret
+                key: db_password
+          - name: POSTGRES_DB
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Values.database.name }}-cm
+                key: db_name
+        volumeMounts:
+          - name: data
+            mountPath: /var/lib/postgresql/data
+        resources:
+          limits:
+            cpu: 200m
+            memory: 100Mi
+          requests:
+            cpu: 100m
+            memory: 50Mi
+      restartPolicy: Always
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: standard 
+        volumeMode: Filesystem
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.database.name }}
+  namespace: jerney
+spec:
+  selector:
+    app: {{ .Values.database.name }}
+  ports:
+  - port: 5432
+    targetPort: 5432
+---
+# --------------------------------------------------
+# Backend Configuration
+# --------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jerney-backend
+  namespace: jerney
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jerney-backend
+  template:
+    metadata:
+      labels:
+        app: jerney-backend
+        service: jerney-backend
+    spec:
+      serviceAccountName: jerney
+      containers:
+      - name: jerney-backend
+        image: iamdoingdemo/jerney-backend:v1
+        ports:
+        - containerPort: 5000
+        env:
+          - name: DB_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Values.database.name }}-cm
+                key: db_host
+          - name: DB_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Values.database.name }}-cm
+                key: db_port
+          - name: DB_USER
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Values.database.name }}-cm
+                key: db_user
+          - name: DB_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Values.database.name }}-cm
+                key: db_name
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.database.name }}-secret
+                key: db_password
+          - name: PORT
+            value: "5000"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jerney-backend
+  namespace: jerney
+spec:
+  selector:
+    app: jerney-backend
+  ports:
+  - port: 5000
+    targetPort: 5000
+---
+# --------------------------------------------------
+# Frontend Configuration
+# --------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jerney-frontend
+  namespace: jerney
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jerney-frontend
+  template:
+    metadata:
+      labels:
+        app: jerney-frontend
+        service: jerney-frontend
+    spec:
+      serviceAccountName: jerney
+      containers:
+      - name: jerney-frontend
+        image: iamdoingdemo/jerney-frontend:v1
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jerney-frontend
+  namespace: jerney
+spec:
+  selector:
+    app: jerney-frontend
+  ports:
+  - port: 80
+    targetPort: 80
+---
+# networkpolicy allow ingress to jerney-backend from jerney-frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: jerney-backend-network-policy
+  namespace: jerney
+spec:
+  podSelector:
+    matchLabels:
+      app: jerney-backend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: jerney
+    - podSelector:
+        matchLabels:
+          app: jerney-frontend
+    ports:
+    - port: 5000
+      protocol: TCP
+---
+# networkpolicy allow ingress to jerney-database from jerney-backend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: jerney-database-network-policy
+  namespace: jerney
+spec:
+  podSelector:
+    matchLabels:
+      app: jerney-database
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: jerney
+    - podSelector:
+        matchLabels:
+          app: jerney-backend
+    ports:
+    - port: 5432
+      protocol: TCP

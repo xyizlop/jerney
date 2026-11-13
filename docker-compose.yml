@@ -1,0 +1,55 @@
+services:
+  db:
+    image: postgres:16
+    container_name: jerney-db
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" # container should interpolate variables, not docker compose
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  # backend
+  backend:
+    image: iamdoingdemo/jerney-backend:v1
+    container_name: jerney-backend
+    restart: unless-stopped
+    environment:
+      DB_HOST: db # doesn't come from env because 'db' is named for postgres service in this file
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      PORT: ${PORT}
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "${PORT}"
+    security_opt:
+      - no-new-privileges
+    read_only: true
+
+  # frontend
+  frontend:
+    image: iamdoingdemo/jerney-frontend:v1
+    container_name: jerney-frontend
+    depends_on:
+      - backend
+    security_opt:
+      - no-new-privileges
+    ports:
+      - "8080:80"
+volumes:
+  postgres_data:
