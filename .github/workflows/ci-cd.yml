@@ -8,9 +8,12 @@ on:
     branches:
       - master
 
+# -------------------------------------------
+# Stage 1: Linting
+# -------------------------------------------
+
 jobs:
   lint:
-    # continue-on-error: true
     strategy:
       matrix:
         component:
@@ -26,6 +29,28 @@ jobs:
           cache-dependency-path: "${{ matrix.component }}/package-lock.json"
       - run: npm ci
         working-directory: ${{ matrix.component }}
-      - name: Lint
-        run: npm run lint
+      - run: npm run lint
+        working-directory: ${{ matrix.component }}
+
+# -------------------------------------------
+# Stage 2: Audit or SCA
+# -------------------------------------------
+
+  audit:
+    strategy:
+      matrix:
+        component:
+        - frontend
+        - backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: "${{ matrix.component }}/package-lock.json"
+      - run: npm ci
+        working-directory: ${{ matrix.component }}
+      - run: npm audit --audit-level=high
         working-directory: ${{ matrix.component }}
