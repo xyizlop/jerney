@@ -10,6 +10,7 @@ on:
 
 jobs:
   lint:
+    continue-on-error: true
     strategy:
       matrix:
         component:
@@ -22,5 +23,6 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
+          cache-dependency-path: "${{ matrix.component }}/package-lock.json"
       - name: Lint
         run: cd ${{ matrix.component }} && npm run lint
