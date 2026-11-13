@@ -25,5 +25,6 @@ jobs:
           cache: 'npm'
           cache-dependency-path: "${{ matrix.component }}/package-lock.json"
       - run: npm ci
+        working-directory: ${{ matrix.component }}
       - name: Lint
         run: cd ${{ matrix.component }} && npm run lint
