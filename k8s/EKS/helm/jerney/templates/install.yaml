@@ -172,7 +172,7 @@ spec:
       serviceAccountName: jerney
       containers:
       - name: jerney-backend
-        image: iamdoingdemo/jerney-backend:v1
+        image: iamdoingdemo/{{ .Values.backend.image }}:{{ .Values.backend.tag }}
         ports:
         - containerPort: 5000
         env:
@@ -245,7 +245,7 @@ spec:
       serviceAccountName: jerney
       containers:
       - name: jerney-frontend
-        image: iamdoingdemo/jerney-frontend:v1
+        image: iamdoingdemo/{{ .Values.frontend.image }}:{{ .Values.backend.tag }}
         ports:
         - containerPort: 80
         resources:
