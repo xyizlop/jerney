@@ -27,4 +27,5 @@ jobs:
       - run: npm ci
         working-directory: ${{ matrix.component }}
       - name: Lint
-        run: cd ${{ matrix.component }} && npm run lint
+        run: npm run lint
+        working-directory: ${{ matrix.component }}
