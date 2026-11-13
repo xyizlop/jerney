@@ -97,8 +97,6 @@ jobs:
 
   docker-push:
     needs: pac
-    permissions:
-      packages: write # for pushing in GHCR
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -109,6 +107,7 @@ jobs:
           component: backend
 
     steps:
+    - uses: actions/checkout@v7
     - name: Login to Docker Hub
       uses: docker/login-action@v4
       with:
@@ -120,7 +119,7 @@ jobs:
       with:
         images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.repo }}
         tags: |
-          # 1. WTH
+          # 1. latest if default branch
           type=raw,value=latest,enable={{is_default_branch}}
           
           # 2. Matches GitHub commit SHA (use format=short for an 8-character SHA)
