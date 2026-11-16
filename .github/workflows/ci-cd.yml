@@ -37,7 +37,7 @@ jobs:
         working-directory: ${{ matrix.component }}
 
 # -------------------------------------------
-# Stage 2: Audit or SCA
+# Stage 2: Audit or SCA of frontend/backend
 # -------------------------------------------
 
   audit:
@@ -61,7 +61,7 @@ jobs:
         working-directory: ${{ matrix.component }}
 
 # -------------------------------------------
-# Stage 3: Checkov
+# Stage 3: Checkov k8s manifests
 # -------------------------------------------
 
   pac:
@@ -91,9 +91,25 @@ jobs:
         with:
           sarif_file: results.sarif
 
+# -------------------------------------------
+# Stage 5: Dockerfile Linting
+# -------------------------------------------
+
+  docker-lint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component:
+        - frontend
+        - backend
+    steps:
+    - uses: actions/checkout@v7
+    - uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: ${{ matrix.component }}/Dockerfile
 
 # -------------------------------------------
-# Stage 4: Scan Docker Image
+# Stage 5: Scan Docker Image
 # -------------------------------------------
   docker-scan:
     runs-on: ubuntu-latest
@@ -118,7 +134,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
 # -------------------------------------------
-# Stage 5: Build and Push to Docker Hub
+# Stage 6: Build and Push to Docker Hub
 # -------------------------------------------
 
   docker-push:
