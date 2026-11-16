@@ -91,8 +91,34 @@ jobs:
         with:
           sarif_file: results.sarif
 
+
 # -------------------------------------------
-# Stage 4: Push to GHCR
+# Stage 4: Scan Docker Image
+# -------------------------------------------
+  docker-scan:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component:
+        - frontend
+        - backend
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build Docker Image for Scan
+        run: docker build -t ${{ matrix.component }}:scanme ${{ matrix.component }}/
+        shell: bash
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: '${{ matrix.component }}:scanme'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+# -------------------------------------------
+# Stage 5: Build and Push to Docker Hub
 # -------------------------------------------
 
   docker-push:
