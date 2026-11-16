@@ -60,6 +60,18 @@ spec:
       name: jerney-database-secret
       namespace: jerney
 ---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.pvc.storageClassName }}
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.eks.amazonaws.com
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  type: {{ .Values.pvc.storageClassType }}
+  encrypted: "true"
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -132,7 +144,7 @@ spec:
         name: data
       spec:
         accessModes: [ "ReadWriteOnce" ]
-        storageClassName: standard 
+        storageClassName: {{ .Values.pvc.storageClassName }}
         volumeMode: Filesystem
         resources:
           requests:

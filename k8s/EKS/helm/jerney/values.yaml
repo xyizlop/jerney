@@ -19,6 +19,10 @@ database:
   username: jerney_user
   port: "5432"
 
+pvc:
+  storageClassName: ebs-general
+  storageClassType: gp3
+
 securityContext: {}
   # capabilities:
   #   drop:
