@@ -327,3 +327,106 @@ spec:
     ports:
     - port: 5432
       protocol: TCP
+---
+# --------------------------------------------------
+# Load Balancer (Gateway API) Configuration
+# --------------------------------------------------
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: aws-alb-gateway-class
+  namespace: jerney
+spec:
+  controllerName: gateway.k8s.aws/alb
+---
+apiVersion: gateway.k8s.aws/v1
+kind: LoadBalancerConfiguration
+metadata:
+  name: external-lb
+  namespace: jerney
+spec:
+  scheme: internet-facing
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: alb-gateway
+  namespace: jerney
+spec:
+  gatewayClassName: aws-alb-gateway-class
+  infrastructure:
+    parametersRef:
+      kind: LoadBalancerConfiguration
+      name: external-lb
+      group: gateway.k8s.aws
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      protocol: HTTPS
+      port: 443
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: jerney
+  namespace: jerney
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: alb-gateway
+      sectionName: http
+  hostnames:
+  - "blogwithjerney.local"
+  rules:
+    - backendRefs:
+        - name: jerney-frontend
+          port: 80
+# --------------------------------------------------
+# ArgoCD Configuration (Controller Required)
+# --------------------------------------------------
+# required because ALB by default creates http target group but argocd is https
+apiVersion: gateway.k8s.aws/v1
+kind: TargetGroupConfiguration
+metadata:
+  name: argocd-server-tg
+  namespace: jerney
+spec:
+  targetReference:
+    group: ""
+    kind: Service
+    name: argocd-server # matches the below HTTPRoute service
+  defaultConfiguration:
+    protocol: HTTPS
+    healthCheckConfig:
+      healthCheckProtocol: HTTPS
+      healthCheckPath: /healthz
+      healthCheckPort: traffic-port
+      matcher:
+        httpCode: "200-399"
+---
+kind: HTTPRoute
+metadata:
+  name: argocd
+  namespace: jerney
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: alb-gateway
+      sectionName: https
+      namespace: jerney # default is also same as HTTPRoute namespace (if Gateway is in different namespace, change it to match that)
+  hostnames:
+  - "argocd.devstuffs.com" # certificate is automatically discovered and provided by ACM entry in AWS account
+  rules:
+    - backendRefs:
+        - name: argocd-server # this is the exact name of service on argocd installation
+          port: 443
