@@ -274,6 +274,7 @@ metadata:
   name: jerney-frontend
   namespace: jerney
 spec:
+  type: NodePort
   selector:
     app: jerney-frontend
   ports:
@@ -385,7 +386,7 @@ spec:
       name: alb-gateway
       sectionName: http
   hostnames:
-  - "blogwithjerney.local"
+  - "app.devstuffs.com"
   rules:
     - backendRefs:
         - name: jerney-frontend
@@ -393,6 +394,34 @@ spec:
 # --------------------------------------------------
 # ArgoCD Configuration (Controller Required)
 # --------------------------------------------------
+apiVersion: gateway.k8s.aws/v1
+kind: LoadBalancerConfiguration
+metadata:
+  name: internal-lb # for argocd
+  namespace: jerney
+spec:
+  scheme: internal
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: internal-alb-gateway
+  namespace: jerney
+spec:
+  gatewayClassName: aws-alb-gateway-class
+  infrastructure:
+    parametersRef:
+      kind: LoadBalancerConfiguration
+      name: internal-lb
+      group: gateway.k8s.aws
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
 # required because ALB by default creates http target group but argocd is https
 apiVersion: gateway.k8s.aws/v1
 kind: TargetGroupConfiguration
@@ -406,6 +435,7 @@ spec:
     name: argocd-server # matches the below HTTPRoute service
   defaultConfiguration:
     protocol: HTTPS
+    # targetType: ip
     healthCheckConfig:
       healthCheckProtocol: HTTPS
       healthCheckPath: /healthz
@@ -421,7 +451,7 @@ spec:
   parentRefs:
     - group: gateway.networking.k8s.io
       kind: Gateway
-      name: alb-gateway
+      name: internal-alb-gateway
       sectionName: https
       namespace: jerney # default is also same as HTTPRoute namespace (if Gateway is in different namespace, change it to match that)
   hostnames:
