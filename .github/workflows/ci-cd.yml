@@ -185,3 +185,25 @@ jobs:
         tags: ${{ steps.meta.outputs.tags }}
         context: ./${{ matrix.component }}
         file: ./${{ matrix.component }}/Dockerfile
+
+# -------------------------------------------
+# Stage 7: Update HELM Values for ArgoCD
+# -------------------------------------------
+
+  write-helm-values: # argocd will pick up then
+    needs: docker-push
+    permissions:
+      contents: write # to commit changes
+    name: Write HELM Chart values.yaml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: master # required for git-auto-commit-action because this is trigged by tag push and not branch push
+      - name: Update tag in values.yaml for frontend/backend
+        run: yq -i '.frontend.tag = "sha-${{ github.sha }}"' k8s/EKS/helm/jerney/values.yaml && yq -i '.backend.tag = "sha-${{ github.sha }}"' k8s/EKS/helm/jerney/values.yaml
+      - name: Commit Changes
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          file_pattern: "helm/go-web-app-chart/values.yaml"
+          commit_message: Update helm chart tag for frontend/backend
