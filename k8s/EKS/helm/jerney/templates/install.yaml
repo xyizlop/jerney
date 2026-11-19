@@ -54,7 +54,7 @@ metadata:
   namespace: jerney
 spec:
   encryptedData:
-    db_password: AgC29YPGukHjhLVlUMrv4nzG0ccpAC5UOz4v6reJ/vTJDV+YrCrGzX7qkp8OQkBE3sCQTwTQSAARePwesUXl2sjKsGmEgmovvKdpWTZli3uzRSex5fpJRnp64V+pHm57izZoN42yD60m8jd0Z8XTcjiv61uRuLW3VoImdu5ZJvISLrUXBEWxDNPoBtMdV+PIdlQzB7IBD2YlCixjpXoEzv4Q/pMIaLOp+EJJZ5DdjIFJIiUasi13h3Gtp+b77PeJ5EOkRsAz467QkyyC0LlqBGfNuOE+vuogaey7ysVyjGrOMXwwlgK9h69ATZMFODwgi6ceplmgqQUoBLV2u3T2mOerCkasOgLjSVNgSkKpl5lbzjEMPGGkSD8tBL6Jb8X8Y2/OUFvDEo1doOjZOvzRSanC8JVXQlJNyS89+dNZ/U34hrgqRx1yzTqhvik0UwiHyW65BhY5QYzbyZD3PGrrrJp00vSws3azG2nbqPGMxgQ7qGS4SwH+rSYAAOLCqswt8+J0+NBhft4Yd0RdY/pKxxi9Uaa/GylAabVXlErww9iysyxStXV8CqZuuYs/wLDtkjEYYe+6d1e66h+frDKU4UyiAAALAIW30znjVfqOEAzgVzs7nJKPma25paiE/1bg3CjITM/MDT4ouOx+HtgAAHK+1lgNHkt4KuYMA+koDdzxSBAWVtRuIcCIWOrCY0ntQ5sZ1NMDl2B2xsPUZmLWJfVLS9Gh
+    db-password: AgAcb6PBU0weYF8315dsTTiaBVX+7OzF+jv6YickSw8jUuTvi0IO87Sea8UBvN1yngv2NWZvcdrWjO3gDykZV6Nxey0Mq0XexpPLJ1hSu/L5o/XZ6smnaNuYjGuz/UW0I94MjkPum4YYaiSxnzO8V6Hdhv9+b/uEVFGAXGODp+JyDHqeiZXKynDVJAtwcDy0ULmRAsCqqEkBi0Y+jff8bVGz26fdY5CzyeHlbqucSmnLjbREdHt/kVWMixqOTec5p3n8Kvyg4Q60P9VWAp0RfIkJVyHuqDMSeLHxfe+H7N6zq5DJfZdFswJg5TyQ11J0f9NQSJnwfSqcjrdJ8GvJCP+xat/KFU8NW56rYjMAXUK0PGZ5Nksp0H80fCO5Wb9zWaLJKfSlrDw4dqooVhVSuEnPSUqiDmAbWfcxprmyiKGJbhH47iNPUrwBnFPvE0SoO+IPD3jnBTxlmuaemyJusjmZ7VDZglN1iHBmwwa3PnN57QWTRTSMS1zIdhWLdd0gMGcsQltCaGdAsAxFECmXC4MQq9hjCn86Sk4/H/UBzBYx4nh2GNBbEALZFzOXyyEzMV9td1i7YH5xaYzJhr2f5QtpzVmDaS+odl3XGGCNCED1ea1tXMcDP5dCnpwUxTkONpohILxEgk2fh/n63HxRPnB8/X2TymF4u5kTkULvvvsQYnpD4UxZbWu/Bd4b+0vBvBOHG13hx0XnFyeh3Jxe2nuryW6c
   template:
     metadata:
       name: jerney-database-secret
@@ -66,11 +66,12 @@ metadata:
   name: {{ .Values.pvc.storageClassName }}
   annotations:
     storageclass.kubernetes.io/is-default-class: "true"
-provisioner: ebs.csi.eks.amazonaws.com
-volumeBindingMode: WaitForFirstConsumer
+provisioner: ebs.csi.aws.com # this is for managed node groups, for auto mode use `ebs.csi.eks.amazonaws.com`
 parameters:
   type: {{ .Values.pvc.storageClassType }}
   encrypted: "true"
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -131,6 +132,12 @@ spec:
         volumeMounts:
           - name: data
             mountPath: /var/lib/postgresql/data
+            # without this (subpath):
+            # initdb: error: directory "/var/lib/postgresql/data" exists but is not empty
+            # initdb: detail: It contains a lost+found directory, perhaps due to it being a mount point.
+            # initdb: hint: Using a mount point directly as the data directory is not recommended.
+            # Create a subdirectory under the mount point.
+            subPath: pgdata
         resources:
           limits:
             cpu: 200m
@@ -329,134 +336,3 @@ spec:
     - port: 5432
       protocol: TCP
 ---
-# --------------------------------------------------
-# Load Balancer (Gateway API) Configuration
-# --------------------------------------------------
-apiVersion: gateway.networking.k8s.io/v1
-kind: GatewayClass
-metadata:
-  name: aws-alb-gateway-class
-  namespace: jerney
-spec:
-  controllerName: gateway.k8s.aws/alb
----
-apiVersion: gateway.k8s.aws/v1
-kind: LoadBalancerConfiguration
-metadata:
-  name: external-lb
-  namespace: jerney
-spec:
-  scheme: internet-facing
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: Gateway
-metadata:
-  name: alb-gateway
-  namespace: jerney
-spec:
-  gatewayClassName: aws-alb-gateway-class
-  infrastructure:
-    parametersRef:
-      kind: LoadBalancerConfiguration
-      name: external-lb
-      group: gateway.k8s.aws
-  listeners:
-    - name: http
-      protocol: HTTP
-      port: 80
-      allowedRoutes:
-        namespaces:
-          from: Same
-    - name: https
-      protocol: HTTPS
-      port: 443
-      allowedRoutes:
-        namespaces:
-          from: Same
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: jerney
-  namespace: jerney
-spec:
-  parentRefs:
-    - group: gateway.networking.k8s.io
-      kind: Gateway
-      name: alb-gateway
-      sectionName: http
-  hostnames:
-  - "app.devstuffs.com"
-  rules:
-    - backendRefs:
-        - name: jerney-frontend
-          port: 80
-# --------------------------------------------------
-# ArgoCD Configuration (Controller Required)
-# --------------------------------------------------
-apiVersion: gateway.k8s.aws/v1
-kind: LoadBalancerConfiguration
-metadata:
-  name: internal-lb # for argocd
-  namespace: jerney
-spec:
-  scheme: internal
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: Gateway
-metadata:
-  name: internal-alb-gateway
-  namespace: jerney
-spec:
-  gatewayClassName: aws-alb-gateway-class
-  infrastructure:
-    parametersRef:
-      kind: LoadBalancerConfiguration
-      name: internal-lb
-      group: gateway.k8s.aws
-  listeners:
-    - name: https
-      protocol: HTTPS
-      port: 443
-      allowedRoutes:
-        namespaces:
-          from: Same
----
-# required because ALB by default creates http target group but argocd is https
-apiVersion: gateway.k8s.aws/v1
-kind: TargetGroupConfiguration
-metadata:
-  name: argocd-server-tg
-  namespace: jerney
-spec:
-  targetReference:
-    group: ""
-    kind: Service
-    name: argocd-server # matches the below HTTPRoute service
-  defaultConfiguration:
-    protocol: HTTPS
-    # targetType: ip
-    healthCheckConfig:
-      healthCheckProtocol: HTTPS
-      healthCheckPath: /healthz
-      healthCheckPort: traffic-port
-      matcher:
-        httpCode: "200-399"
----
-kind: HTTPRoute
-metadata:
-  name: argocd
-  namespace: jerney
-spec:
-  parentRefs:
-    - group: gateway.networking.k8s.io
-      kind: Gateway
-      name: internal-alb-gateway
-      sectionName: https
-      namespace: jerney # default is also same as HTTPRoute namespace (if Gateway is in different namespace, change it to match that)
-  hostnames:
-  - "argocd.devstuffs.com" # certificate is automatically discovered and provided by ACM entry in AWS account
-  rules:
-    - backendRefs:
-        - name: argocd-server # this is the exact name of service on argocd installation
-          port: 443
