@@ -205,5 +205,5 @@ jobs:
       - name: Commit Changes
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
-          file_pattern: "helm/go-web-app-chart/values.yaml"
+          file_pattern: "k8s/EKS/helm/jerney/values.yaml"
           commit_message: Update helm chart tag for frontend/backend
