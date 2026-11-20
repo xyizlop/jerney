@@ -7,10 +7,10 @@ replicaCount: 1
 # This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
 frontend:
   image: jerney-frontend
-  tag: "sha-f75f7bd16607070a5114d8648995ec9b96e6ed46"
+  tag: "sha-194d3e48d33a8db9fd45ee1784d7148533ff3e40"
 backend:
   image: jerney-backend
-  tag: "sha-f75f7bd16607070a5114d8648995ec9b96e6ed46"
+  tag: "sha-194d3e48d33a8db9fd45ee1784d7148533ff3e40"
 database:
   name: jerney-database
   host: jerney-database
