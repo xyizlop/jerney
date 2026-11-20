@@ -20,12 +20,12 @@ kubectl create namespace argocd
 # clone repo
 # good to clone at /tmp because it's not part of your project
 cd /tmp
-git clone https://github.com/argoproj/argo-helm.git
+git clone --depth 1 https://github.com/argoproj/argo-helm.git
 cd argo-helm/charts/argo-cd
 helm dependency up # downloads dependencies from Chart.yaml
 
 # install
-helm install argocd . --values values.yaml --wait --timeout 10m -n argocd
+helm upgrade --install argocd . --values values.yaml --wait --timeout 10m -n argocd
 
 # patching because for aws alb type 'instance' -> NodePort is needed
 kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "NodePort"}}'

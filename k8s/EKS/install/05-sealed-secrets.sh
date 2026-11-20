@@ -10,8 +10,9 @@ CLUSTER_REGION="ap-south-1"
 # set kubeconfig current context
 echo Updating kubconfig...
 aws eks update-kubeconfig --region "$CLUSTER_REGION" --name "$CLUSTER_NAME"
-PROJECT_ROOT=$(realpath "$(dirname "$0")/../../..")
-HELM_DIR="${PROJECT_ROOT}/k8s/EKS/helm"
-APPLICATION_NAME="jerney"
-echo "$HELM_DIR"
-helm upgrade --install "$APPLICATION_NAME" "$HELM_DIR" --values "$HELM_DIR/values.yaml"
+
+helm repo add sealed-secrets https://bitnami.github.io/sealed-secrets
+helm repo update
+helm install sealed-secrets sealed-secrets/sealed-secrets \
+  -n kube-system \
+  --set-string fullnameOverride=sealed-secrets-controller

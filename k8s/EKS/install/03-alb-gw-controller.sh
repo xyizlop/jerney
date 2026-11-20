@@ -77,7 +77,8 @@ function install_alb_controller {
     -n kube-system \
     --set clusterName=$CLUSTER_NAME \
     --set serviceAccount.create=false \
-    --set serviceAccount.name=$SERVICE_ACCOUNT_NAME
+    --set serviceAccount.name=$SERVICE_ACCOUNT_NAME \
+    --set region=ap-south-1 --set vpcId=vpc-0ec276ca41c15d026
 }
 
 #####################
